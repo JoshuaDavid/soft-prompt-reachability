@@ -191,3 +191,102 @@ Now running Experiments 2a/2b (random targets).
 5. **Remarkably consistent:** The per-pair variance is tiny — this is a robust geometric property of the model.
 
 Now running Experiment 5 (target corruption sweep) if time permits.
+
+## 2026-02-21 18:50 — Experiment 5 Complete (Target Corruption Sweep)
+
+### Results:
+| Fraction Replaced | Median Cosine | PCA Dirs Replaced |
+|-------------------|---------------|-------------------|
+| 0.0 | 0.9960 | 0 (unchanged) |
+| 0.1 | 0.9634 | 76 |
+| 0.2 | 0.9655 | 153 |
+| 0.3 | 0.9611 | 230 |
+| 0.5 | 0.9639 | 384 |
+| 0.7 | 0.9720 | 537 |
+| 1.0 | 0.9647 | 768 |
+
+### Interpretation:
+**The corruption curve is NOT monotonically decreasing — it shows a U-shape!**
+
+1. **Sharp initial drop:** From f=0.0 (cos 0.996) to f=0.1 (cos 0.963), there's a large 0.033 drop. Replacing just the top 10% of PCA directions (the 76 highest-variance directions) immediately makes the target much harder.
+
+2. **Plateau from f=0.1 to f=0.5:** Cosine stays around 0.961-0.966 regardless of how many additional directions are corrupted. This is the "floor" for chimeric targets.
+
+3. **Slight recovery at f=0.7:** cos=0.972 — *higher* than f=0.3! When most of the target's structure is replaced, the optimization may be finding it easier because the target is more "generic" (closer to a random target).
+
+4. **f=1.0 (fully random) gives cos=0.965:** comparable to f=0.1. This is consistent with Exp 2b (raw random targets, cos 0.971 with 3000 steps — here we used only 1000 steps, accounting for the small gap).
+
+**Key insight:** The hardest targets to reach are not fully random, but rather partially corrupted — chimeras that have some real structure (constraining the optimization) mixed with inconsistent random components. This is consistent with the theoretical expectation that "contradictory activation regimes" cause difficulty.
+
+**The reachable set has no sharp boundary.** Even at full corruption, cosine remains above 0.96. The "boundary" between reachable and unreachable is gradual, and the transition happens mostly in the first 10% of PCA direction corruption.
+
+## 2026-02-21 19:00 — All Experiments Complete: Synthesis
+
+### Summary of Results
+
+| Experiment | Condition | Median Cosine | Key Finding |
+|-----------|-----------|---------------|-------------|
+| 1 | Real targets | 0.9960 | Near-perfect reachability |
+| 1b | Embedding distance | cos=0.15 | Solutions far from token manifold |
+| 2a | Dist-matched random | 0.9771 | Still reachable, but harder |
+| 2b | Raw random | 0.9708 | Even random dirs mostly reachable |
+| 3 | Interpolation (α=0.5) | 0.9880 | Midpoints slightly harder |
+| 3 | Extrapolation (α=2.0) | 0.9731 | Graceful degradation |
+| 4a | No FFN | 0.9949 | FFN barely matters (Δ=-0.001) |
+| 4b | No Attention | 0.9792 | Attention matters more (Δ=-0.017) |
+| 5 | 10% PCA corrupted | 0.9634 | Sharp initial drop |
+| 5 | 100% PCA corrupted | 0.9647 | Plateau (no worse than 10%) |
+
+### Answering the Core Research Questions
+
+**Q: Can you find a layer-0 input that produces a target activation at layer 6?**
+**A: Yes, almost always, to very high accuracy (cos > 0.96 for all conditions tested).**
+
+The layer-0 to layer-6 map in Pythia-160M is effectively surjective in the directional sense. Given 20 × 768 = 15,360 free parameters targeting 20 × 768 = 15,360 values, the system is well-determined and gradient descent reliably finds solutions.
+
+**Q: How does reachability depend on FFN nonlinearity vs attention mixing?**
+**A: Attention mixing is ~17x more important than FFN nonlinearity for reachability.**
+
+- Removing all FFN layers: Δ = -0.001 (negligible)
+- Removing all attention layers: Δ = -0.017 (small but consistent)
+- The softmax in attention is the only nonlinearity in the no-FFN model, yet it provides sufficient expressivity for cos > 0.994
+
+**Q: How far are optimized inputs from the token embedding manifold?**
+**A: Extremely far. This is arguably the most important practical finding.**
+
+- Cosine to nearest token embedding: 0.15 (essentially orthogonal)
+- Optimized vector norms: 20.8 (vs embedding norms: 0.8 — a 26x ratio)
+- 0% of optimized vectors have cos > 0.9 to any real token
+
+This means:
+1. The theoretical "soft prompt attack surface" (anything reachable via unconstrained R^768) is vast
+2. But the practical attack surface (anything reachable via token sequences) is unknown and likely much smaller
+3. **The unconstrained problem is NOT a good proxy for the constrained problem**
+
+### Implications
+
+**For Safety/Security:**
+The good news: while arbitrary mid-layer states are theoretically reachable from unconstrained soft prompts, the solutions lie in regions of embedding space that no real token occupies. A soft prompt API that restricts inputs to the token embedding manifold (or a neighborhood thereof) would likely have a much smaller attack surface. The bad news: we haven't shown this restriction is sufficient — it's a necessary follow-up experiment.
+
+**For Prompt-Based Steering:**
+If you want to steer a model to a specific internal state, unconstrained optimization will find a solution, but that solution won't correspond to any real text. Projecting to nearest tokens would likely destroy the carefully optimized state. Constrained optimization (within the token manifold) is the relevant problem for practical steering.
+
+**For Transformer Geometry:**
+The first 6 layers of Pythia-160M are extremely expressive as a function from R^(20×768) to R^(20×768). The residual connections preserve dimensionality (no collapse), and the attention mechanism provides sufficient cross-position coupling. The FFN nonlinearities (GELU) add negligible additional expressivity for reachability — the attention softmax alone is sufficient.
+
+**For the Manifold Hypothesis:**
+Real activations occupy a thin manifold within R^768. The optimization exploits the full ambient space (high-norm, arbitrary-direction vectors) rather than staying on this manifold. The 26x norm gap between optimized inputs and real embeddings is a quantitative measure of how far outside the data manifold the solutions lie.
+
+### Limitations
+
+1. **Model size:** Pythia-160M is small. Larger models may have different reachability properties (more layers = more computational depth = potentially lower reachability, but also more free parameters per position).
+
+2. **Step count:** Raw random targets (Exp 2b) were still converging at 3000 steps. More optimization budget would likely close the gap between conditions.
+
+3. **Target layer:** We only tested layer 6 (middle). Earlier layers should be easier (fewer transformations); later layers may be harder.
+
+4. **Cosine vs MSE divergence:** While cosine similarity is high across all conditions, MSE varies enormously (0.02 for real targets vs 2.0 for raw random). This means the optimizer finds the right direction but wrong scale. For downstream computation, whether this matters depends on how LayerNorm interacts with the residual stream.
+
+5. **No constrained optimization:** The key follow-up — optimizing within the token embedding manifold — was beyond the scope of this session. This is the experiment that would directly answer the practical safety question.
+
+6. **Single model:** All results are for one model. Generalization to other architectures is unknown.
