@@ -290,3 +290,38 @@ Real activations occupy a thin manifold within R^768. The optimization exploits 
 5. **No constrained optimization:** The key follow-up — optimizing within the token embedding manifold — was beyond the scope of this session. This is the experiment that would directly answer the practical safety question.
 
 6. **Single model:** All results are for one model. Generalization to other architectures is unknown.
+
+## 2026-02-21 19:10 — Deeper Statistical Analysis
+
+### Target Difficulty Correlations (Experiment 4)
+
+A key question: do the same targets that are hard for the full model also tend to be hard for the ablated models?
+
+| Comparison | Pearson r | p-value |
+|-----------|-----------|---------|
+| Full vs No-FFN | 0.022 | 0.879 |
+| Full vs No-Attn | 0.030 | 0.837 |
+| No-FFN vs No-Attn | **-0.517** | **1.2e-4** |
+
+**Key finding:** Target difficulty is completely uncorrelated between the full model and either ablated variant (r≈0.02). The optimization landscape is so well-behaved that what makes a target "hard" depends entirely on the model structure, not intrinsic properties of the target.
+
+**More striking: No-FFN and No-Attn difficulties are anti-correlated (r=-0.517).** Targets that are easy to reach via attention-only paths are *harder* to reach via FFN-only paths, and vice versa. This suggests attention and FFN mechanisms are **complementary** — they cover different regions of activation space, and a target's location determines which mechanism is better suited to reach it. The full model, having both mechanisms, can always use whichever is more appropriate, explaining why it uniformly outperforms both ablated variants.
+
+### Restart Variance
+
+All conditions have restart variance <1e-5. The optimization landscape appears to have a single dominant basin for each target — no evidence of local minima trapping.
+
+### PCA Analysis (Experiment 1b)
+
+The optimized vectors project poorly onto the token embedding PCA subspace:
+- k=384 components (65% embedding variance): reconstruction error = 14.7
+- The optimized vectors occupy a fundamentally different subspace of R^768 than token embeddings
+
+### Interpolation Variance (Experiment 3)
+
+Variance increases with distance from the data manifold:
+- α=0.0 (real target): std=0.0003
+- α=0.50 (midpoint): std=0.0012 (4x larger)
+- α=2.0 (far extrapolation): std=0.0034 (11x larger)
+
+This makes geometric sense: near the data manifold, the optimization landscape is well-conditioned (many "nearby" solutions exist). Far from the manifold, solutions are more scattered and target-dependent.
