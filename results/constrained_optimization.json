@@ -1,0 +1,38 @@
+{
+  "manifold_penalty": {
+    "0.0": {
+      "median_cosine": 0.9998635649681091,
+      "median_manifold_cos": 0.5625227093696594,
+      "median_norm": 2.4987876415252686
+    },
+    "0.1": {
+      "median_cosine": 0.9929594993591309,
+      "median_manifold_cos": 0.8084293603897095,
+      "median_norm": 2.958941698074341
+    },
+    "1.0": {
+      "median_cosine": 0.9420342445373535,
+      "median_manifold_cos": 0.9266953468322754,
+      "median_norm": 3.003305435180664
+    },
+    "10.0": {
+      "median_cosine": 0.7349193692207336,
+      "median_manifold_cos": 0.9904680252075195,
+      "median_norm": 2.1285016536712646
+    }
+  },
+  "token_mixture": {
+    "0.1": {
+      "median_continuous_cos": 0.9466727375984192,
+      "median_discrete_cos": 0.9281835556030273
+    },
+    "0.5": {
+      "median_continuous_cos": 0.9984537363052368,
+      "median_discrete_cos": 0.9635550379753113
+    },
+    "1.0": {
+      "median_continuous_cos": 0.9979894757270813,
+      "median_discrete_cos": 0.9598885774612427
+    }
+  }
+}

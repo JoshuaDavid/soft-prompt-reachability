@@ -353,3 +353,78 @@ This is the definitive answer to the key practical question:
 **For safety:** APIs that restrict soft prompt inputs to the token embedding manifold (or convex hull thereof) are likely safe from the "arbitrary activation via soft prompt" attack vector. The theoretical attack surface is vast but the practical attack surface (reachable via actual tokens) appears to be much smaller.
 
 **For steering:** Direct projection won't work. Any practical prompt-based steering approach needs to optimize directly within the token manifold (e.g., using GCG-style discrete optimization, or continuous optimization with a projection penalty). The unconstrained solution provides no useful starting point for the constrained problem.
+
+---
+
+## 2026-02-21 19:45 — Bonus: Constrained Soft Prompt Optimization
+
+### Motivation
+The nearest-token projection result (cos dropping from 0.996 to 0.601) showed that unconstrained solutions don't transfer to discrete tokens. But what if we optimize *within* the manifold from the start?
+
+### Two Approaches Tested
+
+**Approach 1: Manifold Distance Penalty**
+Add a penalty term that encourages each optimized embedding vector to stay close to its nearest token embedding. Sweep penalty weight λ ∈ {0, 0.1, 1.0, 10.0}.
+
+| λ | Target Cosine | Manifold Cosine | Norm |
+|---|--------------|----------------|------|
+| 0.0 | **0.9999** | 0.563 | 2.50 |
+| 0.1 | 0.993 | 0.808 | 2.96 |
+| 1.0 | 0.942 | 0.927 | 3.00 |
+| 10.0 | 0.735 | **0.990** | 2.13 |
+
+Clear tradeoff: forcing manifold proximity degrades target matching. At λ=1.0, we get a reasonable balance (cos=0.942 with manifold_cos=0.927), but still well below unconstrained performance.
+
+**Approach 2: Token Mixture Optimization (Key Finding)**
+Instead of optimizing raw embedding vectors, optimize softmax logits over the vocabulary. Each position's embedding is a weighted mixture of all token embeddings, parameterized by logits with temperature τ. This guarantees we stay in the convex hull of the embedding manifold. After optimization, we discretize by taking the argmax token at each position.
+
+| τ | Continuous Cosine | Discrete Cosine | Entropy |
+|---|------------------|----------------|---------|
+| 0.1 | 0.947 | 0.928 | 0.1 |
+| 0.5 | **0.999** | **0.964** | 3.2 |
+| 1.0 | 0.998 | 0.960 | 3.4 |
+
+### Key Result
+**The token mixture approach at τ=0.5 achieves discrete_cos=0.964** — dramatically better than naive nearest-token projection (0.601) and close to unconstrained optimization (0.996). This means:
+
+1. **Discrete token sequences CAN reach most target activations** with cos≈0.96, far better than what projection suggested
+2. The failure wasn't that tokens can't reach those activations — it was that the unconstrained optimizer finds solutions far from any token, and projecting afterward loses information
+3. Optimizing within the constraint from the start works vastly better than optimizing unconstrained and projecting
+
+### Revised Safety/Steering Interpretation
+The nearest-token projection result (Bonus 1) initially suggested the token manifold is "safe" from soft prompt attacks. This constrained optimization result **substantially revises that conclusion**:
+
+- **For safety:** Discrete token sequences can reach cos≈0.96 to arbitrary mid-layer activations. This is lower than unconstrained (0.996) but still very high. The token manifold is NOT as protective as the projection analysis suggested. GCG-style or mixture-style optimization within the token space can largely overcome the constraint.
+- **For steering:** The token mixture approach provides a practical method for finding real token sequences that produce desired intermediate activations. The τ=0.5 sweet spot balances exploration (high enough temperature to allow gradient flow) with discreteness (low enough entropy that argmax gives a good discrete solution).
+
+### Files
+- `results/constrained_optimization.json`: Full metrics
+- `results/constrained_optimization.png`: Visualization of both approaches
+
+---
+
+## 2026-02-21 20:07 — Session End Summary
+
+### Research Complete
+All 5 planned experiments plus 3 bonus analyses completed within the time budget.
+
+### Top-Level Findings
+
+1. **Near-universal reachability**: Unconstrained soft prompts reach arbitrary real layer-6 activations with cos≈0.996 (Exp 1).
+
+2. **Random targets equally reachable**: Distribution-matched random targets (cos≈0.974) and even raw random targets (cos≈0.951) are highly reachable — the model's residual stream is nearly universally steerable (Exp 2a/2b).
+
+3. **FFN nonlinearity barely matters**: Ablating FFN (Δ=-0.001) or attention (Δ=-0.017) has negligible impact — the parallel residual stream + skip connection provides sufficient expressiveness even without nonlinear components (Exp 4).
+
+4. **Smooth interpolation geometry**: Interpolated targets degrade gracefully; even extrapolated targets (α=2.0) remain reachable at cos≈0.987 (Exp 3).
+
+5. **PCA structure doesn't gate reachability**: Replacing all PCA directions with random values barely affects optimization (cos 0.996→0.965), confirming the optimizer finds solutions regardless of target structure (Exp 5).
+
+6. **Projection to tokens fails**: Projecting unconstrained solutions to nearest tokens collapses matching from cos 0.996 to 0.601 — barely above random 0.545 (Bonus 1).
+
+7. **But constrained optimization succeeds**: Token mixture optimization achieves discrete_cos=0.964, showing that *real token sequences* can reach most target activations when optimized properly (Bonus 2). This is the most practically significant finding.
+
+### The Story
+The residual stream of Pythia-160M at layer 6 is almost entirely reachable from layer 0 via continuous optimization — the network's parallel residual architecture with skip connections creates a nearly bijective map from input to intermediate representations. This reachability is robust to ablation, interpolation, corruption, and even extends to random targets.
+
+The critical practical question is whether this reachability extends to *discrete* token inputs. Naive projection says no (cos drops to 0.601), but constrained optimization within the token manifold says **largely yes** (cos=0.964). This finding has implications for both safety (the token manifold is not as protective as projection analysis suggests) and interpretability (discrete steering of intermediate representations is feasible).
