@@ -1,0 +1,16 @@
+{
+  "original_optimized": {
+    "mean": 0.9959518909454346,
+    "median": 0.9959630966186523
+  },
+  "nearest_token_projection": {
+    "mean": 0.6006178665161133,
+    "median": 0.6058992743492126
+  },
+  "random_tokens": {
+    "mean": 0.5454514706134796,
+    "median": 0.5472559630870819
+  },
+  "projection_drop": 0.3953340244293213,
+  "above_random": 0.055166395902633614
+}

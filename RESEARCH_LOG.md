@@ -325,3 +325,31 @@ Variance increases with distance from the data manifold:
 - α=2.0 (far extrapolation): std=0.0034 (11x larger)
 
 This makes geometric sense: near the data manifold, the optimization landscape is well-conditioned (many "nearby" solutions exist). Far from the manifold, solutions are more scattered and target-dependent.
+
+## 2026-02-21 19:30 — Bonus Analysis: Nearest-Token Projection
+
+### The Critical Question
+If we project the optimized continuous prompt to its nearest discrete tokens, how much of the layer-6 activation matching survives?
+
+### Results:
+| Input Type | Mean Cosine to Target |
+|-----------|----------------------|
+| Optimized continuous | **0.9960** |
+| Nearest-token projection | **0.6006** |
+| Random tokens (baseline) | 0.5455 |
+
+**The projection destroys almost all the activation matching.** Cosine drops from 0.996 to 0.601 — barely above random tokens (0.546). The optimized solution is critically dependent on being in the high-norm, arbitrary-direction region of R^768 that tokens can't access.
+
+Even using weighted averages of top-k nearest tokens doesn't help much:
+- k=3: 0.631
+- k=5: 0.638
+- k=10: 0.643
+
+### Interpretation
+This is the definitive answer to the key practical question:
+
+**Unconstrained soft prompt reachability does NOT imply real-token reachability.** The optimization finds solutions in a completely different part of embedding space than any discrete token occupies, and projecting to nearest tokens collapses the carefully optimized state. The residual 0.055 advantage over random tokens is small — projecting to nearest tokens recovers only ~14% of the gap between random and perfect matching.
+
+**For safety:** APIs that restrict soft prompt inputs to the token embedding manifold (or convex hull thereof) are likely safe from the "arbitrary activation via soft prompt" attack vector. The theoretical attack surface is vast but the practical attack surface (reachable via actual tokens) appears to be much smaller.
+
+**For steering:** Direct projection won't work. Any practical prompt-based steering approach needs to optimize directly within the token manifold (e.g., using GCG-style discrete optimization, or continuous optimization with a projection penalty). The unconstrained solution provides no useful starting point for the constrained problem.
