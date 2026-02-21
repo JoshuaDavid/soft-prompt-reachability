@@ -1,0 +1,51 @@
+{
+  "cosine_to_nearest": {
+    "mean": 0.15639062225818634,
+    "median": 0.15366050601005554,
+    "std": 0.013222383335232735,
+    "min": 0.13075539469718933,
+    "max": 0.2264184206724167,
+    "frac_above_0.9": 0.0,
+    "frac_above_0.95": 0.0
+  },
+  "l2_to_nearest": {
+    "mean": 20.704345703125,
+    "median": 20.55352783203125,
+    "std": 1.3813906908035278
+  },
+  "optimized_norms": {
+    "mean": 20.812023162841797,
+    "median": 20.664316177368164
+  },
+  "embedding_norms": {
+    "mean": 0.7887886762619019,
+    "median": 0.7960999608039856
+  },
+  "pca_analysis": {
+    "k=10": {
+      "mean_recon_error": 20.627744674682617,
+      "median_recon_error": 20.461280822753906,
+      "cumvar_explained": 0.06244584918022156
+    },
+    "k=50": {
+      "mean_recon_error": 20.094144821166992,
+      "median_recon_error": 19.95348358154297,
+      "cumvar_explained": 0.174827441573143
+    },
+    "k=100": {
+      "mean_recon_error": 19.43840980529785,
+      "median_recon_error": 19.298568725585938,
+      "cumvar_explained": 0.27062222361564636
+    },
+    "k=200": {
+      "mean_recon_error": 18.007322311401367,
+      "median_recon_error": 17.849716186523438,
+      "cumvar_explained": 0.42194661498069763
+    },
+    "k=384": {
+      "mean_recon_error": 14.793709754943848,
+      "median_recon_error": 14.697649002075195,
+      "cumvar_explained": 0.6457874774932861
+    }
+  }
+}
