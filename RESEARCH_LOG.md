@@ -428,3 +428,46 @@ All 5 planned experiments plus 3 bonus analyses completed within the time budget
 The residual stream of Pythia-160M at layer 6 is almost entirely reachable from layer 0 via continuous optimization — the network's parallel residual architecture with skip connections creates a nearly bijective map from input to intermediate representations. This reachability is robust to ablation, interpolation, corruption, and even extends to random targets.
 
 The critical practical question is whether this reachability extends to *discrete* token inputs. Naive projection says no (cos drops to 0.601), but constrained optimization within the token manifold says **largely yes** (cos=0.964). This finding has implications for both safety (the token manifold is not as protective as projection analysis suggests) and interpretability (discrete steering of intermediate representations is feasible).
+
+---
+
+## 2026-02-21 20:30 — Session 2: Density-Constrained Reachability & Prefix Steering
+
+### New questions
+1. Does the token mixture optimizer rely on outlier tokens, or can high-density (typical) tokens also reach targets?
+2. Can a 20-token soft prompt prefix steer activations at distant positions in a 100-token context?
+
+### Optimization: Partial Forward Pass
+Added `get_residual_fast()` to common.py — runs only layers 0-5 instead of all 12. Exact numerical match with full forward, ~1.5x speedup with gradients.
+
+### Density-Constrained Experiment (running)
+
+**Assumptions:**
+- k-NN density (k=50, cosine similarity to 50 nearest neighbors) is a reasonable proxy for "typicality" in embedding space
+- Token embedding density follows a meaningful distribution (not all uniformly distributed)
+- Restricting to high-density regions doesn't fundamentally change the convex hull geometry
+
+**Setup:** Token mixture optimization (τ=0.5, 2000 steps) with vocabulary restricted to top-N% densest tokens.
+
+**Density statistics:**
+- Mean k-NN density: 0.225, range [0.111, 0.657]
+- Top 10% threshold: cos≥0.302 (5,031 tokens)
+- Top 25% threshold: cos≥0.250 (12,576 tokens)
+
+**Interim results (in progress):**
+
+| Density Band | N Tokens | Median Discrete Cos |
+|-------------|----------|-------------------|
+| Top 10% | 5,031 | 0.647 |
+| Top 25% | 12,576 | (running, ~0.71 at 5/25) |
+| Top 50% | 25,152 | (pending) |
+| Top 75% | 37,728 | (pending) |
+| Full (100%) | 50,304 | 0.964 (prior result) |
+
+**Early interpretation:** The top-10% densest tokens only achieve cos=0.647 — much worse than the full vocabulary's 0.964. This suggests the optimizer critically relies on embedding space outliers. The high-density tokens, being clustered together, don't span enough of R^768 to reach arbitrary targets.
+
+### Prefix Steering Experiment (queued)
+Will test whether a 20-token optimizable prefix can steer layer-6 activations in a 100-token fixed context. Three sub-experiments:
+- A: Steer the last position (pos 119)
+- B: Steer multiple positions simultaneously (1, 5, 10, 20, all 100)
+- C: How does steering quality decay with distance from prefix?

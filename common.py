@@ -60,6 +60,22 @@ def get_residual(input_embeds, layer=TARGET_LAYER):
     return get_all_residuals(input_embeds)[layer]
 
 
+def get_residual_fast(input_embeds, layer=TARGET_LAYER):
+    """Get residual at a specific layer using partial forward (layers 0..layer-1 only).
+
+    ~2x faster than get_residual() for layer=6 since it skips layers 6-11.
+    """
+    hidden = input_embeds.unsqueeze(0)
+    seq_len = hidden.shape[1]
+    position_ids = torch.arange(seq_len, device=hidden.device).unsqueeze(0)
+    position_embeddings = model.gpt_neox.rotary_emb(hidden, position_ids=position_ids)
+    for i in range(layer):
+        hidden = model.gpt_neox.layers[i](
+            hidden, position_embeddings=position_embeddings,
+        )
+    return hidden.squeeze(0)
+
+
 def get_real_target(token_ids):
     """Get the layer-6 residual stream for a real token sequence."""
     with torch.no_grad():
