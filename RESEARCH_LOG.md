@@ -454,17 +454,31 @@ Added `get_residual_fast()` to common.py — runs only layers 0-5 instead of all
 - Top 10% threshold: cos≥0.302 (5,031 tokens)
 - Top 25% threshold: cos≥0.250 (12,576 tokens)
 
-**Interim results (in progress):**
+**Final results:**
 
-| Density Band | N Tokens | Median Discrete Cos |
-|-------------|----------|-------------------|
-| Top 10% | 5,031 | 0.647 |
-| Top 25% | 12,576 | (running, ~0.71 at 5/25) |
-| Top 50% | 25,152 | (pending) |
-| Top 75% | 37,728 | (pending) |
-| Full (100%) | 50,304 | 0.964 (prior result) |
+| Density Band | N Tokens | Median Discrete Cos | Continuous Cos |
+|-------------|----------|-------------------|---------------|
+| Top 10% | 5,031 | **0.647** | 0.870 |
+| Top 25% | 12,576 | **0.773** | 0.961 |
+| Top 50% | 25,152 | **0.864** | 0.991 |
+| Top 75% | 37,728 | **0.901** | 0.995 |
+| Full (100%) | 50,304 | **0.960** | 0.998 |
 
-**Early interpretation:** The top-10% densest tokens only achieve cos=0.647 — much worse than the full vocabulary's 0.964. This suggests the optimizer critically relies on embedding space outliers. The high-density tokens, being clustered together, don't span enough of R^768 to reach arbitrary targets.
+**Interpretation:**
+
+The results show a strong monotonic relationship between vocabulary diversity and reachability:
+
+1. **Top-10% densest tokens are nearly useless (cos=0.647)** — barely above the naive nearest-token projection baseline (0.601). High-density tokens cluster together in a small subspace and can't span the diversity needed to reach arbitrary targets.
+
+2. **You need the full vocabulary for high reachability (cos=0.960).** Even the top-75% only reaches 0.901. Each additional 25% of the vocabulary contributes meaningfully.
+
+3. **The continuous cosine tells a different story than discrete.** Even at top-10%, the continuous mixture achieves cos=0.870 — the softmax-weighted combination can reach the target, but when you discretize to argmax, you lose 0.22 in cosine. At top-100%, the gap is only 0.038. This means:
+   - With a large vocabulary, the argmax token is a good approximation of the mixture
+   - With a small vocabulary, the argmax token is a poor approximation because there are too few options
+
+4. **Safety implication revised again:** The token mixture's cos=0.964 result relies critically on access to rare/outlier tokens. An API that restricts inputs to common tokens (e.g., only the most frequent 10K tokens) would substantially limit reachability (cos≈0.65-0.77).
+
+5. **Why outliers matter:** Token embeddings are roughly uniformly distributed across directions in R^768. The densest tokens cluster in a low-dimensional subspace. Outlier tokens point in unique directions, giving the optimizer "reach" into regions of activation space that clustered tokens can't access. It's the *directional diversity* of the full vocabulary that enables reachability, not just the number of tokens.
 
 ### Prefix Steering Experiment (queued)
 Will test whether a 20-token optimizable prefix can steer layer-6 activations in a 100-token fixed context. Three sub-experiments:
