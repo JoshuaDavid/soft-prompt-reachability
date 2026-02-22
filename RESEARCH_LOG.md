@@ -480,8 +480,53 @@ The results show a strong monotonic relationship between vocabulary diversity an
 
 5. **Why outliers matter:** Token embeddings are roughly uniformly distributed across directions in R^768. The densest tokens cluster in a low-dimensional subspace. Outlier tokens point in unique directions, giving the optimizer "reach" into regions of activation space that clustered tokens can't access. It's the *directional diversity* of the full vocabulary that enables reachability, not just the number of tokens.
 
-### Prefix Steering Experiment (queued)
-Will test whether a 20-token optimizable prefix can steer layer-6 activations in a 100-token fixed context. Three sub-experiments:
-- A: Steer the last position (pos 119)
-- B: Steer multiple positions simultaneously (1, 5, 10, 20, all 100)
-- C: How does steering quality decay with distance from prefix?
+### Prefix Steering Experiment — COMPLETE
+
+**Setup:** 20-token optimizable continuous prefix + 100-token fixed real context. Target: layer-6 activations from a different context. 2000 steps, 3 restarts, `get_residual_fast` for speedup.
+
+**Results:**
+
+#### A. Single-position steering (last position, pos 119)
+| Metric | Value |
+|--------|-------|
+| Median cosine | **1.0000** |
+| Min cosine | **1.0000** |
+
+**Perfect steering across all 20 targets.** The 20-token prefix has complete control over the last position's layer-6 activation.
+
+#### B. Multi-position simultaneous steering
+
+| Config | N Positions | Median Cosine |
+|--------|------------|---------------|
+| last_1 | 1 | **1.000** |
+| last_5 | 5 | **0.998** |
+| last_10 | 10 | **0.989** |
+| last_20 | 20 | **0.967** |
+| all_context | 100 | **0.915** |
+
+Graceful degradation as the number of simultaneously steered positions increases. At 20 positions (matching prefix length), cos=0.967. At 100 positions (5x prefix length), cos=0.915 — still very high.
+
+#### C. Distance from prefix (single position)
+
+| Distance | Median Cosine |
+|----------|---------------|
+| 0 | **1.000** |
+| 5 | **1.000** |
+| 10 | **1.000** |
+| 20 | **1.000** |
+| 40 | **1.000** |
+| 60 | **1.000** |
+| 80 | **1.000** |
+| 99 | **1.000** |
+
+**Distance does not matter.** The prefix achieves perfect cos=1.000 at every distance when steering a single position. Through the attention mechanism, the prefix tokens are equally accessible to all positions in the context.
+
+#### Interpretation
+
+1. **Answer to the key question: YES.** A 20-token soft prompt prefix can perfectly set a middle-layer activation at position 120 in the general case. The attention mechanism provides a direct channel from prefix to any position in the context.
+
+2. **The bottleneck is bandwidth, not reach.** The prefix has 20 × 768 = 15,360 degrees of freedom. Steering 1 position (768 dims) is trivially within budget. Steering 100 positions (76,800 dims) exceeds the prefix's information capacity, degrading to cos=0.915.
+
+3. **Causal attention helps, not hinders.** Even though the context can attend to the prefix but not vice versa, the prefix embeddings serve as key/value "anchors" that all context positions can read from equally.
+
+4. **Safety implication:** This is a strong result for the soft prompt attack surface. An adversary who controls a prefix can steer specific mid-layer activations at distant positions with essentially perfect precision. This works for arbitrary target activations (from different contexts), not just similar ones.
